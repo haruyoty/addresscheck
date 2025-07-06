@@ -1,0 +1,40 @@
+# Windows
+Thumbs.db
+desktop.ini
+ntuser.dat*
+NTUSER.DAT*
+ntuser.ini
+*.log
+*.lnk
+
+# Directories
+/.cache/
+/.codeium/
+/.config/
+/.gemini/
+/.kindle/
+/.windsurf/
+/AppData/
+/Contacts/
+/Documents/
+/Downloads/
+/Favorites/
+/Links/
+/Music/
+/OneDrive/
+/Pictures/
+/Saved Games/
+/Searches/
+/Videos/
+/Windows/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+
+# Misc
+*~
+*.swp
