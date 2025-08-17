@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⛳ AI ゴルフアドレス診断ツール - MediaPipe版</title>
+    
+    <!-- 外部ライブラリ -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header .subtitle {
+            color: #666;
+            font-size: 1.2em;
+            margin-bottom: 10px;
+        }
+
+        .header .badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .left-panel, .right-panel {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 25px;
+        }
+
+        .section-title {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .upload-section {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px 20px;
+            text-align: center;
+            margin-bottom: 25px;
+            background: #f8faff;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .upload-section:hover {
+            border-color: #5a6fd8;
+            background: #f0f8ff;
+        }
+
+        .upload-section.drag-over {
+            border-color: #28a745;
+            background: #f0fff4;
+        }
+
+        .upload-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 50px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 5px;
+        }
+
+        .upload-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 15px rgba(102, 126, 234, 0.3);
+        }
+
+        .camera-btn {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        .settings-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            border: 1px solid #e1e5e9;
+        }
+
+        .setting-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .setting-group label {
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #333;
+            font-size: 0.9em;
+        }
+
+        .setting-group select {
+            padding: 8px;
+            border: 2px solid #e1e5e9;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .canvas-container {
+            position: relative;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .main-canvas {
+            max-width: 100%;
+            height: auto;
+            border-radius: 10px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+        }
+
+        .overlay-canvas {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            pointer-events: none;
+        }
+
+        .video-container {
+            display: none;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .video-element {
+            max-width: 100%;
+            height: auto;
+            border-radius: 10px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+        }
+
+        .action-panel {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .action-btn {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 25px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: bold;
+        }
+
+        .action-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .action-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .clear-btn {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        }
+
+        .results-section {
+            margin-top: 30px;
+        }
+
+        .score-display {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .score-circle {
+            display: inline-block;
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-size: 2em;
+            font-weight: bold;
+            margin: 15px auto;
+            position: relative;
+        }
+
+        .score-circle::after {
+            content: '点';
+            font-size: 0.4em;
+            position: absolute;
+            bottom: 25px;
+        }
+
+        .chart-container {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            margin-bottom: 25px;
+        }
+
+        .chart-canvas {
+            max-height: 400px;
+        }
+
+        .evaluation-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-top: 25px;
+        }
+
+        .evaluation-item {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 4px solid #667eea;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s ease;
+        }
+
+        .evaluation-item:hover {
+            transform: translateY(-2px);
+        }
+
+        .evaluation-score {
+            font-size: 1.4em;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .score-excellent { color: #28a745; }
+        .score-good { color: #ffc107; }
+        .score-poor { color: #dc3545; }
+
+        .status-message {
+            text-align: center;
+            padding: 12px;
+            margin: 15px 0;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        .status-success { background: #d4edda; color: #155724; }
+        .status-error { background: #f8d7da; color: #721c24; }
+        .status-info { background: #d1ecf1; color: #0c5460; }
+        .status-warning { background: #fff3cd; color: #856404; }
+
+        .pose-landmarks {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #e9ecef;
+            border-radius: 3px;
+            margin: 15px 0;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .feature-badge {
+            display: inline-block;
+            background: #007bff;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.7em;
+            margin-left: 5px;
+        }
+
+        @media (max-width: 1024px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container { 
+                padding: 20px; 
+                margin: 10px; 
+            }
+            .upload-section { 
+                padding: 30px 15px; 
+            }
+            .settings-panel { 
+                grid-template-columns: 1fr; 
+            }
+            .evaluation-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 10px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>⛳ AI ゴルフアドレス診断ツール</h1>
+            <p class="subtitle">MediaPipe AI技術による高精度姿勢解析</p>
+            <span class="badge">🤖 MediaPipe Powered</span>
+            <span class="badge">📊 リアルタイム解析</span>
+        </div>
+
+        <div class="main-grid">
+            <!-- 左パネル: 画像/動画入力 -->
+            <div class="left-panel">
+                <div class="section-title">
+                    <span>📷</span> 画像・カメラ入力
+                </div>
+
+                <div class="upload-section" id="upload-section">
+                    <input type="file" id="file-input" accept="image/*">
+                    <button class="upload-btn" onclick="uploadImage()">
+                        📁 画像をアップロード
+                    </button>
+                    <button class="upload-btn camera-btn" onclick="startCamera()">
+                        📹 カメラを起動
+                    </button>
+                    <p style="margin-top: 15px; color: #666; font-size: 0.9em;">
+                        画像をドラッグ&ドロップ、またはカメラでリアルタイム診断
+                    </p>
+                </div>
+
+                <div id="status-message"></div>
+
+                <div class="settings-panel">
+                    <div class="setting-group">
+                        <label for="handedness">利き手</label>
+                        <select id="handedness">
+                            <option value="right">右打ち</option>
+                            <option value="left">左打ち</option>
+                        </select>
+                    </div>
+                    <div class="setting-group">
+                        <label for="shooting-direction">撮影方向</label>
+                        <select id="shooting-direction">
+                            <option value="front">正面</option>
+                            <option value="rear">後方</option>
+                        </select>
+                    </div>
+                    <div class="setting-group">
+                        <label for="club-type">使用クラブ</label>
+                        <select id="club-type">
+                            <option value="Driver">ドライバー</option>
+                            <option value="3W">3番ウッド</option>
+                            <option value="7I">7番アイアン</option>
+                            <option value="PW">ピッチング</option>
+                            <option value="SW">サンド</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 画像表示エリア -->
+                <div class="canvas-container" id="canvas-container" style="display: none;">
+                    <canvas id="main-canvas" class="main-canvas"></canvas>
+                    <canvas id="overlay-canvas" class="overlay-canvas"></canvas>
+                </div>
+
+                <!-- ビデオ表示エリア -->
+                <div class="video-container" id="video-container">
+                    <video id="video-element" class="video-element" autoplay playsinline></video>
+                    <canvas id="video-canvas" style="display: none;"></canvas>
+                </div>
+
+                <div class="action-panel">
+                    <button class="action-btn" id="analyze-btn" onclick="analyzeImage()" disabled>
+                        🤖 AI診断開始
+                    </button>
+                    <button class="action-btn" id="capture-btn" onclick="captureFrame()" style="display: none;">
+                        📸 フレーム取得
+                    </button>
+                    <button class="action-btn clear-btn" onclick="clearAll()">
+                        🗑️ クリア
+                    </button>
+                </div>
+
+                <div class="progress-bar" id="progress-bar" style="display: none;">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+            </div>
+
+            <!-- 右パネル: 結果表示 -->
+            <div class="right-panel">
+                <div class="section-title">
+                    <span>📊</span> 診断結果
+                    <span class="feature-badge">リアルタイム</span>
+                </div>
+
+                <div class="score-display">
+                    <div class="score-circle">
+                        <span id="total-score">--</span>
+                    </div>
+                    <div style="text-align: center; margin-top: 10px;">
+                        <span id="score-status" style="font-weight: bold; color: #666;">画像をアップロードしてください</span>
+                    </div>
+                </div>
+
+                <!-- レーダーチャート -->
+                <div class="chart-container">
+                    <h3 style="text-align: center; margin-bottom: 20px; color: #333;">
+                        📈 総合評価チャート
+                    </h3>
+                    <canvas id="radar-chart" class="chart-canvas"></canvas>
+                </div>
+
+                <!-- 評価詳細 -->
+                <div class="evaluation-grid" id="evaluation-results">
+                    <div class="evaluation-item">
+                        <h4>ボール位置</h4>
+                        <div class="evaluation-score score-excellent">--点</div>
+                        <p>画像を解析してください</p>
+                    </div>
+                    <div class="evaluation-item">
+                        <h4>スタンス幅</h4>
+                        <div class="evaluation-score score-excellent">--点</div>
+                        <p>画像を解析してください</p>
+                    </div>
+                    <div class="evaluation-item">
+                        <h4>姿勢バランス</h4>
+                        <div class="evaluation-score score-excellent">--点</div>
+                        <p>画像を解析してください</p>
+                    </div>
+                    <div class="evaluation-item">
+                        <h4>体の向き</h4>
+                        <div class="evaluation-score score-excellent">--点</div>
+                        <p>画像を解析してください</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // グローバル変数
+        let currentImage = null;
+        let pose = null;
+        let camera = null;
+        let isProcessing = false;
+        let radarChart = null;
+        let currentPose = null;
+        let isCamera = false;
+
+        // MediaPipe Pose初期化
+        function initializeMediaPipe() {
+            pose = new Pose({
+                locateFile: (file) => {
+                    return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+                }
+            });
+
+            pose.setOptions({
+                modelComplexity: 1,
+                smoothLandmarks: true,
+                enableSegmentation: false,
+                smoothSegmentation: true,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            });
+
+            pose.onResults(onResults);
+            showStatus('✅ MediaPipe AI エンジンが準備完了しました', 'success');
+        }
+
+        // MediaPipe結果処理
+        function onResults(results) {
+            if (!isProcessing) return;
+
+            const canvasElement = document.getElementById('main-canvas');
+            const overlayCanvas = document.getElementById('overlay-canvas');
+            
+            if (!canvasElement || !overlayCanvas) return;
+
+            const canvasCtx = overlayCanvas.getContext('2d');
+            
+            // キャンバスサイズを同期
+            overlayCanvas.width = canvasElement.width;
+            overlayCanvas.height = canvasElement.height;
+            
+            // クリア
+            canvasCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
+
+            if (results.poseLandmarks) {
+                currentPose = results.poseLandmarks;
+                
+                // ランドマーク描画
+                drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {
+                    color: '#00FF00', lineWidth: 4
+                });
+                drawLandmarks(canvasCtx, results.poseLandmarks, {
+                    color: '#FF0000', lineWidth: 2
+                });
+
+                // リアルタイム評価（カメラモード時）
+                if (isCamera) {
+                    performRealtimeEvaluation(results.poseLandmarks);
+                }
+            }
+        }
+
+        // リアルタイム評価
+        function performRealtimeEvaluation(landmarks) {
+            if (!landmarks || landmarks.length < 33) return;
+
+            const handedness = document.getElementById('handedness').value;
+            const shootingDirection = document.getElementById('shooting-direction').value;
+            const clubType = document.getElementById('club-type').value;
+
+            const evaluations = calculatePostureScores(landmarks, handedness, shootingDirection, clubType);
+            
+            if (evaluations) {
+                displayRealtimeResults(evaluations);
+            }
+        }
+
+        // 姿勢スコア計算
+        function calculatePostureScores(landmarks, handedness, shootingDirection, clubType) {
+            try {
+                const scores = {};
+                
+                // 基本的な評価指標
+                if (shootingDirection === 'front') {
+                    // 正面撮影時の評価
+                    scores.ballPosition = evaluateBallPosition(landmarks, clubType);
+                    scores.stanceWidth = evaluateStanceWidth(landmarks);
+                    scores.handPosition = evaluateHandPosition(landmarks);
+                    scores.headPosition = evaluateHeadPosition(landmarks);
+                } else {
+                    // 後方撮影時の評価
+                    scores.bodyAlignment = evaluateBodyAlignment(landmarks);
+                    scores.forwardTilt = evaluateForwardTilt(landmarks, clubType);
+                    scores.spinePosture = evaluateSpinePosture(landmarks);
+                    scores.weightBalance = evaluateWeightBalance(landmarks);
+                }
+
+                return scores;
+            } catch (error) {
+                console.error('評価計算エラー:', error);
+                return null;
+            }
+        }
+
+        // 各種評価関数（簡易版）
+        function evaluateBallPosition(landmarks, clubType) {
+            // 足首間の相対位置で評価
+            const leftAnkle = landmarks[27];
+            const rightAnkle = landmarks[28];
+            
+            if (!leftAnkle || !rightAnkle) return 75;
+            
+            const footWidth = Math.abs(leftAnkle.x - rightAnkle.x);
+            const centerX = (leftAnkle.x + rightAnkle.x) / 2;
+            
+            // クラブ別の理想位置（仮）
+            const idealPositions = {
+                'Driver': 0.3,
+                '3W': 0.25,
+                '7I': 0.0,
+                'PW': -0.1,
+                'SW': -0.15
+            };
+            
+            const ideal = idealPositions[clubType] || 0;
+            const score = Math.max(60, 100 - Math.abs(ideal * 200));
+            
+            return Math.round(score);
+        }
+
+        function evaluateStanceWidth(landmarks) {
+            const leftAnkle = landmarks[27];
+            const rightAnkle = landmarks[28];
+            const leftShoulder = landmarks[11];
+            const rightShoulder = landmarks[12];
+            
+            if (!leftAnkle || !rightAnkle || !leftShoulder || !rightShoulder) return 75;
+            
+            const stanceWidth = Math.abs(leftAnkle.x - rightAnkle.x);
+            const shoulderWidth = Math.abs(leftShoulder.x - rightShoulder.x);
+            
+            const ratio = stanceWidth / shoulderWidth;
+            const idealRatio = 1.2; // 理想的な比率
+            
+            const score = Math.max(60, 100 - Math.abs(ratio - idealRatio) * 100);
+            return Math.round(score);
+        }
+
+        function evaluateHandPosition(landmarks) {
+            const leftWrist = landmarks[15];
+            const rightWrist = landmarks[16];
+            const leftHip = landmarks[23];
+            const rightHip = landmarks[24];
+            
+            if (!leftWrist || !rightWrist || !leftHip || !rightHip) return 75;
+            
+            const handCenterX = (leftWrist.x + rightWrist.x) / 2;
+            const hipCenterX = (leftHip.x + rightHip.x) / 2;
+            
+            const deviation = Math.abs(handCenterX - hipCenterX);
+            const score = Math.max(60, 100 - deviation * 500);
+            
+            return Math.round(score);
+        }
+
+        function evaluateHeadPosition(landmarks) {
+            const nose = landmarks[0];
+            const leftAnkle = landmarks[27];
+            const rightAnkle = landmarks[28];
+            
+            if (!nose || !leftAnkle || !rightAnkle) return 75;
+            
+            const footCenterX = (leftAnkle.x + rightAnkle.x) / 2;
+            const headDeviation = Math.abs(nose.x - footCenterX);
+            
+            const score = Math.max(60, 100 - headDeviation * 300);
+            return Math.round(score);
+        }
+
+        function evaluateBodyAlignment(landmarks) {
+            const leftShoulder = landmarks[11];
+            const rightShoulder = landmarks[12];
+            const leftHip = landmarks[23];
+            const rightHip = landmarks[24];
+            
+            if (!leftShoulder || !rightShoulder || !leftHip || !rightHip) return 75;
+            
+            const shoulderAngle = Math.atan2(leftShoulder.y - rightShoulder.y, leftShoulder.x - rightShoulder.x);
+            const hipAngle = Math.atan2(leftHip.y - rightHip.y, leftHip.x - rightHip.x);
+            
+            const angleDiff = Math.abs(shoulderAngle - hipAngle);
+            const score = Math.max(60, 100 - angleDiff * 100);
+            
+            return Math.round(score);
+        }
+
+        function evaluateForwardTilt(landmarks, clubType) {
+            const leftShoulder = landmarks[11];
+            const leftHip = landmarks[23];
+            
+            if (!leftShoulder || !leftHip) return 75;
+            
+            const tiltAngle = Math.atan2(leftShoulder.x - leftHip.x, leftHip.y - leftShoulder.y);
+            const tiltDegrees = Math.abs(tiltAngle * 180 / Math.PI);
+            
+            // クラブ別理想角度
+            const idealAngles = {
+                'Driver': 30,
+                '3W': 32,
+                '7I': 35,
+                'PW': 40,
+                'SW': 42
+            };
+            
+            const ideal = idealAngles[clubType] || 35;
+            const score = Math.max(60, 100 - Math.abs(tiltDegrees - ideal) * 2);
+            
+            return Math.round(score);
+        }
+
+        function evaluateSpinePosture(landmarks) {
+            const nose = landmarks[0];
+            const leftShoulder = landmarks[11];
+            const rightShoulder = landmarks[12];
+            const leftHip = landmarks[23];
+            const rightHip = landmarks[24];
+            
+            if (!nose || !leftShoulder || !rightShoulder || !leftHip || !rightHip) return 75;
+            
+            const shoulderCenter = {
+                x: (leftShoulder.x + rightShoulder.x) / 2,
+                y: (leftShoulder.y + rightShoulder.y) / 2
+            };
+            
+            const hipCenter = {
+                x: (leftHip.x + rightHip.x) / 2,
+                y: (leftHip.y + rightHip.y) / 2
+            };
+            
+            // 背骨の曲がり具合を評価
+            const spineAlignment = Math.abs((nose.x - shoulderCenter.x) - (shoulderCenter.x - hipCenter.x));
+            const score = Math.max(60, 100 - spineAlignment * 1000);
+            
+            return Math.round(score);
+        }
+
+        function evaluateWeightBalance(landmarks) {
+            const leftAnkle = landmarks[27];
+            const rightAnkle = landmarks[28];
+            const leftHip = landmarks[23];
+            const rightHip = landmarks[24];
+            
+            if (!leftAnkle || !rightAnkle || !leftHip || !rightHip) return 75;
+            
+            const footCenterX = (leftAnkle.x + rightAnkle.x) / 2;
+            const hipCenterX = (leftHip.x + rightHip.x) / 2;
+            
+            const balance = Math.abs(footCenterX - hipCenterX);
+            const score = Math.max(60, 100 - balance * 400);
+            
+            return Math.round(score);
+        }
+
+        // リアルタイム結果表示
+        function displayRealtimeResults(evaluations) {
+            const scores = Object.values(evaluations);
+            const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+            
+            // 総合スコア更新
+            document.getElementById('total-score').textContent = Math.round(avgScore);
+            
+            // スコア状態更新
+            const statusElement = document.getElementById('score-status');
+            if (avgScore >= 85) {
+                statusElement.textContent = '✅ 素晴らしいアドレス！';
+                statusElement.style.color = '#28a745';
+            } else if (avgScore >= 70) {
+                statusElement.textContent = '⚠️ 改善の余地あり';
+                statusElement.style.color = '#ffc107';
+            } else {
+                statusElement.textContent = '❌ 要改善';
+                statusElement.style.color = '#dc3545';
+            }
+            
+            // レーダーチャート更新
+            updateRadarChart(evaluations);
+            
+            // 詳細評価更新
+            updateDetailedEvaluation(evaluations);
+        }
+
+        // ステータスメッセージ表示
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status-message');
+            statusDiv.innerHTML = `<div class="status-message status-${type}">${message}</div>`;
+            
+            setTimeout(() => {
+                statusDiv.innerHTML = '';
+            }, 5000);
+        }
+
+        // プログレスバー更新
+        function updateProgress(percentage) {
+            const progressBar = document.getElementById('progress-bar');
+            const progressFill = document.getElementById('progress-fill');
+            
+            if (percentage > 0) {
+                progressBar.style.display = 'block';
+                progressFill.style.width = percentage + '%';
+            } else {
+                progressBar.style.display = 'none';
+            }
+        }
+
+        // 写真アップロード
+        function uploadImage() {
+            document.getElementById('file-input').click();
+        }
+
+        // カメラ起動
+        async function startCamera() {
+            try {
+                if (!pose) {
+                    showStatus('❌ MediaPipeが初期化されていません', 'error');
+                    return;
+                }
+
+                const videoElement = document.getElementById('video-element');
+                const videoContainer = document.getElementById('video-container');
+                const canvasContainer = document.getElementById('canvas-container');
+                
+                // カメラストリーム取得
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { width: 640, height: 480 }
+                });
+                
+                videoElement.srcObject = stream;
+                videoContainer.style.display = 'block';
+                canvasContainer.style.display = 'none';
+                
+                // カメラモード設定
+                isCamera = true;
+                isProcessing = true;
+                
+                // ボタン切り替え
+                document.getElementById('analyze-btn').style.display = 'none';
+                document.getElementById('capture-btn').style.display = 'inline-block';
+                
+                // MediaPipeにカメラを接続
+                camera = new Camera(videoElement, {
+                    onFrame: async () => {
+                        if (pose && isProcessing) {
+                            await pose.send({ image: videoElement });
+                        }
+                    },
+                    width: 640,
+                    height: 480
+                });
+                
+                camera.start();
+                showStatus('📹 カメラが起動しました。リアルタイム診断中...', 'success');
+                
+            } catch (error) {
+                console.error('カメラエラー:', error);
+                showStatus('❌ カメラの起動に失敗しました', 'error');
+            }
+        }
+
+        // フレーム取得
+        function captureFrame() {
+            const videoElement = document.getElementById('video-element');
+            const canvas = document.getElementById('video-canvas');
+            const ctx = canvas.getContext('2d');
+            
+            canvas.width = videoElement.videoWidth;
+            canvas.height = videoElement.videoHeight;
+            
+            ctx.drawImage(videoElement, 0, 0);
+            
+            // 画像として保存
+            canvas.toBlob((blob) => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'golf_address_capture.jpg';
+                a.click();
+                URL.revokeObjectURL(url);
+            });
+            
+            showStatus('📸 フレームをキャプチャしました', 'success');
+        }
+
+        // ファイル選択処理
+        document.getElementById('file-input').addEventListener('change', function(e) {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        // ドラッグ&ドロップ処理
+        const uploadSection = document.getElementById('upload-section');
+
+        uploadSection.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            uploadSection.classList.add('drag-over');
+        });
+
+        uploadSection.addEventListener('dragleave', function(e) {
+            e.preventDefault();
+            uploadSection.classList.remove('drag-over');
+        });
+
+        uploadSection.addEventListener('drop', function(e) {
+            e.preventDefault();
+            uploadSection.classList.remove('drag-over');
+            if (e.dataTransfer.files.length > 0) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        // ファイル処理
+        function handleFile(file) {
+            if (!file.type.startsWith('image/')) {
+                showStatus('❌ 画像ファイルを選択してください', 'error');
+                return;
+            }
+
+            if (file.size > 10 * 1024 * 1024) {
+                showStatus('❌ ファイルサイズが大きすぎます（10MB以下）', 'error');
+                return;
+            }
+
+            showStatus('📤 画像を読み込み中...', 'info');
+            
+            // カメラ停止
+            stopCamera();
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                currentImage = e.target.result;
+                displayImage(currentImage);
+                showStatus('✅ 画像のアップロードが完了しました！', 'success');
+                document.getElementById('analyze-btn').disabled = false;
+            };
+
+            reader.onerror = function() {
+                showStatus('❌ 画像の読み込みに失敗しました', 'error');
+            };
+
+            reader.readAsDataURL(file);
+        }
+
+        // 画像表示
+        function displayImage(imageSrc) {
+            const canvas = document.getElementById('main-canvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            
+            img.onload = function() {
+                const maxWidth = 600;
+                const maxHeight = 400;
+                let { width, height } = img;
+                
+                if (width > maxWidth) {
+                    height = (height * maxWidth) / width;
+                    width = maxWidth;
+                }
+                if (height > maxHeight) {
+                    width = (width * maxHeight) / height;
+                    height = maxHeight;
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                document.getElementById('canvas-container').style.display = 'block';
+                document.getElementById('video-container').style.display = 'none';
+            };
+            
+            img.src = imageSrc;
+        }
+
+        // AI診断
+        async function analyzeImage() {
+            if (!currentImage || !pose) {
+                showStatus('❌ 画像とMediaPipeが必要です', 'error');
+                return;
+            }
+
+            showStatus('🤖 AI診断を実行中...', 'info');
+            updateProgress(25);
+            
+            try {
+                isProcessing = true;
+                
+                // 画像をMediaPipeに送信
+                const img = new Image();
+                img.onload = async function() {
+                    updateProgress(50);
+                    await pose.send({ image: img });
+                    updateProgress(75);
+                    
+                    // 少し待ってから結果を処理
+                    setTimeout(() => {
+                        if (currentPose) {
+                            processAnalysisResults();
+                        } else {
+                            showStatus('❌ 姿勢が検出できませんでした', 'error');
+                        }
+                        updateProgress(0);
+                        isProcessing = false;
+                    }, 1000);
+                };
+                img.src = currentImage;
+                
+            } catch (error) {
+                console.error('分析エラー:', error);
+                showStatus('❌ 分析中にエラーが発生しました', 'error');
+                updateProgress(0);
+                isProcessing = false;
+            }
+        }
+
+        // 分析結果処理
+        function processAnalysisResults() {
+            if (!currentPose) return;
+            
+            const handedness = document.getElementById('handedness').value;
+            const shootingDirection = document.getElementById('shooting-direction').value;
+            const clubType = document.getElementById('club-type').value;
+            
+            const evaluations = calculatePostureScores(currentPose, handedness, shootingDirection, clubType);
+            
+            if (evaluations) {
+                displayResults(evaluations);
+                showStatus('✅ AI診断が完了しました！', 'success');
+            } else {
+                showStatus('❌ 評価の計算に失敗しました', 'error');
+            }
+        }
+
+        // 結果表示
+        function displayResults(evaluations) {
+            displayRealtimeResults(evaluations);
+        }
+
+        // レーダーチャート更新
+        function updateRadarChart(evaluations) {
+            const ctx = document.getElementById('radar-chart').getContext('2d');
+            
+            const labels = Object.keys(evaluations).map(key => {
+                const labelMap = {
+                    ballPosition: 'ボール位置',
+                    stanceWidth: 'スタンス幅',
+                    handPosition: '手の位置',
+                    headPosition: '頭の位置',
+                    bodyAlignment: '体の向き',
+                    forwardTilt: '前傾角度',
+                    spinePosture: '背筋姿勢',
+                    weightBalance: '重心バランス'
+                };
+                return labelMap[key] || key;
+            });
+            
+            const data = Object.values(evaluations);
+            
+            if (radarChart) {
+                radarChart.destroy();
+            }
+            
+            radarChart = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'スコア',
+                        data: data,
+                        backgroundColor: 'rgba(102, 126, 234, 0.2)',
+                        borderColor: 'rgba(102, 126, 234, 1)',
+                        borderWidth: 2,
+                        pointBackgroundColor: 'rgba(102, 126, 234, 1)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgba(102, 126, 234, 1)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        r: {
+                            beginAtZero: true,
+                            max: 100,
+                            min: 0,
+                            ticks: {
+                                stepSize: 20
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+
+        // 詳細評価更新
+        function updateDetailedEvaluation(evaluations) {
+            const container = document.getElementById('evaluation-results');
+            container.innerHTML = '';
+            
+            Object.entries(evaluations).forEach(([key, score]) => {
+                const labelMap = {
+                    ballPosition: 'ボール位置',
+                    stanceWidth: 'スタンス幅',
+                    handPosition: '手の位置',
+                    headPosition: '頭の位置',
+                    bodyAlignment: '体の向き',
+                    forwardTilt: '前傾角度',
+                    spinePosture: '背筋姿勢',
+                    weightBalance: '重心バランス'
+                };
+                
+                const commentMap = {
+                    ballPosition: 'クラブに適したボール位置です',
+                    stanceWidth: '肩幅に対して適切なスタンス幅です',
+                    handPosition: '手の位置は良好です',
+                    headPosition: '頭の位置は適切です',
+                    bodyAlignment: '体の向きは揃っています',
+                    forwardTilt: '前傾角度は適切です',
+                    spinePosture: '背筋は適切に保たれています',
+                    weightBalance: '重心バランスは良好です'
+                };
+                
+                const label = labelMap[key] || key;
+                const comment = commentMap[key] || '評価中...';
+                
+                let scoreClass = 'score-excellent';
+                if (score < 85) scoreClass = 'score-good';
+                if (score < 70) scoreClass = 'score-poor';
+                
+                const item = document.createElement('div');
+                item.className = 'evaluation-item';
+                item.innerHTML = `
+                    <h4>${label}</h4>
+                    <div class="evaluation-score ${scoreClass}">${score}点</div>
+                    <p>${comment}</p>
+                `;
+                
+                container.appendChild(item);
+            });
+        }
+
+        // カメラ停止
+        function stopCamera() {
+            if (camera) {
+                camera.stop();
+                camera = null;
+            }
+            
+            const videoElement = document.getElementById('video-element');
+            if (videoElement.srcObject) {
+                const tracks = videoElement.srcObject.getTracks();
+                tracks.forEach(track => track.stop());
+                videoElement.srcObject = null;
+            }
+            
+            isCamera = false;
+            isProcessing = false;
+            
+            document.getElementById('video-container').style.display = 'none';
+            document.getElementById('analyze-btn').style.display = 'inline-block';
+            document.getElementById('capture-btn').style.display = 'none';
+        }
+
+        // 全クリア
+        function clearAll() {
+            stopCamera();
+            
+            currentImage = null;
+            currentPose = null;
+            
+            document.getElementById('file-input').value = '';
+            document.getElementById('canvas-container').style.display = 'none';
+            document.getElementById('analyze-btn').disabled = true;
+            
+            // スコアリセット
+            document.getElementById('total-score').textContent = '--';
+            document.getElementById('score-status').textContent = '画像をアップロードしてください';
+            document.getElementById('score-status').style.color = '#666';
+            
+            // チャートクリア
+            if (radarChart) {
+                radarChart.destroy();
+                radarChart = null;
+            }
+            
+            // 評価結果リセット
+            const container = document.getElementById('evaluation-results');
+            container.innerHTML = `
+                <div class="evaluation-item">
+                    <h4>ボール位置</h4>
+                    <div class="evaluation-score score-excellent">--点</div>
+                    <p>画像を解析してください</p>
+                </div>
+                <div class="evaluation-item">
+                    <h4>スタンス幅</h4>
+                    <div class="evaluation-score score-excellent">--点</div>
+                    <p>画像を解析してください</p>
+                </div>
+                <div class="evaluation-item">
+                    <h4>姿勢バランス</h4>
+                    <div class="evaluation-score score-excellent">--点</div>
+                    <p>画像を解析してください</p>
+                </div>
+                <div class="evaluation-item">
+                    <h4>体の向き</h4>
+                    <div class="evaluation-score score-excellent">--点</div>
+                    <p>画像を解析してください</p>
+                </div>
+            `;
+            
+            showStatus('🗑️ すべてクリアされました', 'info');
+        }
+
+        // 初期化
+        window.onload = function() {
+            console.log('ゴルフアドレス診断ツール（MediaPipe版）初期化開始');
+            
+            // レーダーチャート初期化
+            const ctx = document.getElementById('radar-chart').getContext('2d');
+            radarChart = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: ['ボール位置', 'スタンス幅', '姿勢バランス', '体の向き'],
+                    datasets: [{
+                        label: 'スコア',
+                        data: [0, 0, 0, 0],
+                        backgroundColor: 'rgba(102, 126, 234, 0.2)',
+                        borderColor: 'rgba(102, 126, 234, 1)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        r: {
+                            beginAtZero: true,
+                            max: 100,
+                            min: 0,
+                            ticks: {
+                                stepSize: 20
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+            
+            // MediaPipe初期化
+            initializeMediaPipe();
+        };
+    </script>
+</body>
+</html>
